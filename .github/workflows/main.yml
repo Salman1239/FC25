@@ -6,6 +6,7 @@ on:
 jobs:
   secure-rdp:
     runs-on: windows-latest
+    # Maximum timeout for GitHub-hosted runners is 360 minutes (6 hours)
     timeout-minutes: 360
 
     steps:
@@ -106,8 +107,12 @@ jobs:
           Write-Host "Password: $(echo $env:RDP_CREDS)"
           Write-Host "==================`n"
           
-          # Keep runner active indefinitely (or until manually cancelled)
-          while ($true) {
-              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
-              Start-Sleep -Seconds 300
+          # Keep runner active by generating output more frequently
+          $timeout = New-TimeSpan -Minutes 358 # Total timeout minus buffer
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($stopwatch.Elapsed -lt $timeout) {
+              Write-Host "[$(Get-Date)] RDP Active - Auto-refreshing every 60 seconds"
+              Start-Sleep -Seconds 60
           }
+          
+          Write-Host "`nMaximum runtime reached. Job will terminate shortly.`n"
