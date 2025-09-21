@@ -1,0 +1,23 @@
+name: Install Firefox with apt
+
+on: [push]
+
+jobs:
+  install-packages:
+    # Use the latest Ubuntu runner
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Firefox using apt
+        run: |
+          # The `apt update` command is needed to fetch the latest list of available packages
+          sudo apt-get update
+          
+          # The `-y` flag is added to automatically say "yes" to any prompts
+          sudo apt-get install -y firefox
+          
+          # Optional: verify the installation
+          firefox --version
