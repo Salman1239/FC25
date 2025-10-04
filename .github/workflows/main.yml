@@ -1,4 +1,4 @@
-name: Salman's PC
+name: Salman's PC (TailScale)
 
 on:
   workflow_dispatch:
