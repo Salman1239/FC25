@@ -1,0 +1,61 @@
+name: Salman's PC (CloudFlared)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Configure Core RDP Settings
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+                             -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "UserAuthentication" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+                             -Name "SecurityLayer" -Value 0 -Force
+          netsh advfirewall firewall delete rule name="RDP-Cloudflare"
+          netsh advfirewall firewall add rule name="RDP-Cloudflare" `
+            dir=in action=allow protocol=TCP localport=3389
+          Restart-Service -Name TermService -Force
+
+      - name: Create RDP User with Fixed Password
+        run: |
+          Add-Type -AssemblyName System.Security
+          $password = "${{ secrets.RDP_PASSWORD }}"
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+          if (-not (Get-LocalUser -Name "RDP")) {
+              Write-Error "User creation failed"
+              exit 1
+          }
+
+      - name: Install Cloudflared
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "$env:TEMP\cloudflared.exe"
+          Move-Item "$env:TEMP\cloudflared.exe" "$env:ProgramFiles\cloudflared\cloudflared.exe"
+
+      - name: Start Cloudflare Tunnel
+        run: |
+          $token = "${{ secrets.CLOUDFLARE_TUNNEL_TOKEN }}"
+          & "$env:ProgramFiles\cloudflared\cloudflared.exe" service install $token
+
+      - name: Maintain Connection
+        run: |
+          Write-Host "`n=== RDP ACCESS ==="
+          Write-Host "Connect using your Cloudflare hostname (e.g., rdp.example.com)"
+          Write-Host "Username: RDP"
+          Write-Host "Password: (your GitHub secret)"
+          Write-Host "==================`n"
+          $timeout = New-TimeSpan -Minutes 358
+          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($stopwatch.Elapsed -lt $timeout) {
+              Write-Host "[$(Get-Date)] RDP Active - Auto-refreshing every 60 seconds"
+              Start-Sleep -Seconds 60
+          }
+          Write-Host "`nMaximum runtime reached. Job will terminate shortly.`n"
